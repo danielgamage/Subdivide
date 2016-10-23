@@ -12,6 +12,7 @@
 #import <GlyphsCore/GSGlyph.h>
 #import <GlyphsCore/GSLayer.h>
 #import <GlyphsCore/GSPath.h>
+#import <GlyphsCore/GSNode.h>
 
 @implementation Subdivide
 
@@ -43,6 +44,36 @@
 	return nil;
 }
 
+- (NSString*)customParameterString {
+    return @"Subdivide";
+}
+
+- (GSNode*) getSibling:(GSNode*)node next:(bool)next {
+    GSPath *path = node.parent;
+    NSUInteger index = [path indexOfNode:node];
+    NSUInteger length = [path.nodes count];
+    NSUInteger siblingIndex;
+
+    if (next == YES) {
+        // if last node
+        siblingIndex = (index == length - 1) ? 0 : index + 1;
+    } else {
+        // if first node
+        siblingIndex = (index == 0) ? length - 1 : index - 1;
+    }
+
+    GSNode *nextNode = [path nodeAtIndex:siblingIndex];
+    return nextNode;
+}
+
+- (GSNode*) prevNode:(GSNode*)node {
+    return [self getSibling:node next:NO];
+}
+
+- (GSNode*) nextNode:(GSNode*)node {
+    return [self getSibling:node next:YES];
+}
+
 - (NSError*) setup {
 	if ([_fontMaster.userData objectForKey:@"____TheFirstValue____"]) {
 		_firstValue = [[_fontMaster.userData objectForKey:@"____TheFirstValue____"] floatValue];
@@ -56,27 +87,63 @@
 
 - (void) processLayer:(GSLayer*)Layer withFirstValue:(CGFloat)FirstValue {
 	// the method should contain all parameters as arguments
-	
+
 	// do stuff with the Layer.
-	
-	
+    NSLog(@"Subdivide processLayer: %@", Layer);
+
+    for (GSPath *path in Layer.paths) {
+        // store static node count
+        int nodeCount = [path.nodes count];
+        double ONE_THIRD = 1.0000000/3;
+        double IN_BETWEEN = 1.0000000/2;
+
+        for (int i = nodeCount; i > 0; i--) {
+            // insert nodes backwards
+            GSNode *pointOne = (i == nodeCount)
+                ? [path insertNodeWithPathTime:(i + ONE_THIRD)]
+                : [path insertNodeWithPathTime:(i + IN_BETWEEN)];
+            GSNode *pointTwo = (i > 1)
+                ? [path insertNodeWithPathTime:(i - ONE_THIRD)]
+                : [path insertNodeWithPathTime:(i - IN_BETWEEN)];
+
+            // find midpoints
+            CGFloat midpointX = (pointOne.position.x + pointTwo.position.x) / 2;
+            CGFloat midpointY = (pointOne.position.y + pointTwo.position.y) / 2;
+            NSPoint midpoint = NSMakePoint(midpointX, midpointY);
+
+            if (path.nodes[i - 1]) {
+                GSNode *node = [self nextNode:path.nodes[i - 1]];
+                [node setPosition:midpoint];
+            }
+        }
+
+        for (int i = 0; i < nodeCount; i++) {
+            GSNode *oncurveNode = [self nextNode:path.nodes[i * 3]];
+            oncurveNode.type = CURVE;
+            oncurveNode.connection = SMOOTH;
+            [self prevNode:oncurveNode].type = OFFCURVE;
+            [self nextNode:oncurveNode].type = OFFCURVE;
+        }
+    }
 }
 
 - (void) processFont:(GSFont*)Font withArguments:(NSArray*)Arguments {
 	// Invoked when called as Custom Parameter in an instance at export.
-	// The Arguments come from the custom parameter in the instance settings. 
+	// The Arguments come from the custom parameter in the instance settings.
 	// The first item in Arguments is the class-name. After that, it depends on the filter.
-	CGFloat FirstValue;
+    NSLog(@"Subdivide processFont");
+	CGFloat FirstValue = 0.0;
 	if ([Arguments count] > 1) {
 		FirstValue = [[Arguments objectAtIndex:1] floatValue];
 	}
-	checkSelection = NO;
+	_checkSelection = NO;
 	NSString * FontMasterId = [Font fontMasterAtIndex:0].id;
 	BOOL Include = NO;
-	NSSet * Glyphs = getIncludeExcludeGlyphList(Arguments, &Include);
+//	NSSet * Glyphs = getIncludeExcludeGlyphList(Arguments, &Include);
 	for (GSGlyph * Glyph in Font.glyphs) {
-		if (Glyphs && [Glyphs containsObject:Glyph.name] != Include) continue;
-		
+        NSLog(@"Subdivide glyph");
+//		if (Glyphs && [Glyphs containsObject:Glyph.name] != Include) continue;
+
 		GSLayer * Layer = [Glyph layerForKey:FontMasterId];
 		[self processLayer:Layer withFirstValue:FirstValue];
 	}
@@ -85,6 +152,7 @@
 - (IBAction) setFirstValue:(id)sender {
 	// This is only an example for a setter method.
 	// Add methods like this for each option in the dialog.
+    NSLog(@"Subdivide setFirstValue");
 	CGFloat FirstValue = [sender floatValue];
 	if(fabs(FirstValue - _firstValue) > 0.01) {
 		_firstValue = FirstValue;
@@ -93,28 +161,30 @@
 }
 
 - (void) process:(id)sender {
-	int k;
-	for (k = 0; k < [_shadowLayers count]; k++) {
-		GSLayer * ShadowLayer = [_shadowLayers objectAtIndex:k];
-		GSLayer * Layer = [_layers objectAtIndex:k];
-		Layer.paths = [[NSMutableArray alloc] initWithArray:ShadowLayer.paths copyItems:YES];
-		Layer.selection = [NSMutableArray array];
-		if ([ShadowLayer.selection count] > 0 && checkSelection) {
-			int i, j;
-			for (i = 0; i < [ShadowLayer.paths count]; i++) {
-				GSPath * currShadowPath = [ShadowLayer.paths objectAtIndex:i];
-				GSPath * currLayerPath = [Layer.paths objectAtIndex:i];
-				for (j = 0; j < [currShadowPath.nodes count]; j++) {
-					GSNode * currShadowNode = [currShadowPath.nodes objectAtIndex:j];
-					if ([ShadowLayer.selection containsObject:currShadowNode]) {
-						[Layer addSelection:[currLayerPath.nodes objectAtIndex:j]];
-					}
-				}
-			}
-		}
-		[self processLayer:Layer withFirstValue:_firstValue];
-		[Layer clearSelection];
-	}
+    NSLog(@"Subdivide process:(id)sender");
+    [self processLayer:controller.activeLayer withFirstValue:_firstValue];
+//	int k;
+//	for (k = 0; k < [_shadowLayers count]; k++) {
+//		GSLayer * ShadowLayer = [_shadowLayers objectAtIndex:k];
+//		GSLayer * Layer = [_layers objectAtIndex:k];
+//		Layer.paths = [[NSMutableArray alloc] initWithArray:ShadowLayer.paths copyItems:YES];
+//		Layer.selection = [NSMutableArray array];
+//		if ([ShadowLayer.selection count] > 0 && _checkSelection) {
+//			int i, j;
+//			for (i = 0; i < [ShadowLayer.paths count]; i++) {
+//				GSPath * currShadowPath = [ShadowLayer.paths objectAtIndex:i];
+//				GSPath * currLayerPath = [Layer.paths objectAtIndex:i];
+//				for (j = 0; j < [currShadowPath.nodes count]; j++) {
+//					GSNode * currShadowNode = [currShadowPath.nodes objectAtIndex:j];
+//					if ([ShadowLayer.selection containsObject:currShadowNode]) {
+//						[Layer addSelection:[currLayerPath.nodes objectAtIndex:j]];
+//					}
+//				}
+//			}
+//		}
+//		[self processLayer:Layer withFirstValue:_firstValue];
+//		[Layer clearSelection];
+//	}
 	// Safe the value in the FontMaster. But could be saved in UserDefaults, too.
 	[_fontMaster.userData setObject:[NSNumber numberWithDouble:_firstValue] forKey:@"____TheFirstValue____"];
 	[super process:nil];
