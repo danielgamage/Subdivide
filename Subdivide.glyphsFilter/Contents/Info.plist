@@ -36,5 +36,7 @@
 	<string>0800</string>
 	<key>DTXcodeBuild</key>
 	<string>8A218a</string>
+	<key>UpdateFeedURL</key>
+	<string>https://raw.githubusercontent.com/danielgamage/Subdivide/master/Subdivide.glyphsFilter/Contents/Info.plist</string>
 </dict>
 </plist>
