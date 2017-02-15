@@ -10,4 +10,4 @@ Based on https://github.com/danielgamage/Glyphs-Scripts#subdivision. Uses a Catm
 
 Your subdivided output will be shown in the preview window:
 
-![Subdivide Screenshot](https://github.com/danielgamage/Subdivide/blob/master/screenshot.png?raw=true)
+![Subdivide Screenshot](https://github.com/danielgamage/Subdivide/blob/master/screenshot.jpg?raw=true)
